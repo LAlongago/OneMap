@@ -67,8 +67,8 @@ class YOLOv7Detector:
              (self.image_size, int(self.image_size * 0.7)),
              interpolation=cv2.INTER_AREA,
         )
-        img = img
-        img = letterbox(img, new_shape=self.image_size)[0]
+        resized_shape = img.shape
+        img, ratio, pad = letterbox(img, new_shape=self.image_size)
         img = img.transpose(2, 0, 1)
         img = np.ascontiguousarray(img)
 
@@ -91,8 +91,13 @@ class YOLOv7Detector:
             classes=self.classes_oi,
             agnostic=False,
         )[0]
-        # Rescale boxes from img_size to im0 size
-        pred[:, :4] = scale_coords(img.shape[2:], pred[:, :4], orig_shape).round()
+        # Undo letterboxing first, then the anisotropic resize above. Scaling
+        # directly to orig_shape incorrectly assumes an aspect-preserving resize.
+        pred[:, :4] = scale_coords(img.shape[2:], pred[:, :4], resized_shape,
+                                  ratio_pad=(ratio, pad))
+        pred[:, [0, 2]] *= orig_shape[1] / resized_shape[1]
+        pred[:, [1, 3]] *= orig_shape[0] / resized_shape[0]
+        pred[:, :4] = pred[:, :4].round()
         pred[:, 0] = torch.clip(pred[:, 0], 0, orig_shape[1] - 1)
         pred[:, 1] = torch.clip(pred[:, 1], 0, orig_shape[0] - 1)
         pred[:, 2] = torch.clip(pred[:, 2], 0, orig_shape[1] - 1)
